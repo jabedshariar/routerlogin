@@ -38,3 +38,9 @@ See [connector installation instructions](connector/README.md). The connector cu
 - does not request, store, or transmit router credentials.
 
 This is discovery only. Router login automation and configuration changes are not implemented yet. Feature availability will depend on tested router model/firmware adapters.
+
+## Remote access architecture
+
+Routerly is being developed as a globally accessible cloud platform. Remote access to a private home/office router requires either a Routerly Network Agent running inside that network and maintaining an outbound secure connection, or a manufacturer-supported cloud API. The agent is not a browser localhost server and does not require inbound router port forwarding.
+
+See [Remote Management Architecture](docs/REMOTE_MANAGEMENT_ARCHITECTURE.md) for the target topology, pairing model, security boundaries, and delivery phases. Remote management is not yet operational in this release.
