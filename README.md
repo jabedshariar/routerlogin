@@ -25,4 +25,4 @@ Never enter router credentials into an unverified interface. This initial web fr
 
 ## Target brands
 
-See `src/data/brands.ts` for the initial brand catalogue.
+The initial brand catalogue is currently defined in `app/page.tsx` and can be moved into a dedicated data module as the compatibility database grows.
