@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: routerly-cloud-relay
+    runtime: docker
+    dockerfilePath: ./cloud-relay/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: WEB_ORIGIN
+        value: https://routerlogin.vercel.app
