@@ -25,15 +25,46 @@ export default function Home() {
   const [active, setActive] = useState("Overview");
   const [menuOpen, setMenuOpen] = useState(false);
   const [connector, setConnector] = useState<"idle" | "checking" | "offline" | "available">("idle");
+  const [discovery, setDiscovery] = useState<{address:string;reachable:boolean;brand:string|null;model:string|null;login_url:string;message:string}|null>(null);
   const filtered = useMemo(() => brands.filter((b) => b.toLowerCase().includes(query.toLowerCase())), [query]);
 
   async function checkConnector() {
     setConnector("checking");
+    setDiscovery(null);
     try {
-      const response = await fetch("http://127.0.0.1:8765/health", { signal: AbortSignal.timeout(1800) });
-      if (!response.ok) throw new Error("Connector unavailable");
+      const health = await fetch("http://127.0.0.1:8765/health", {
+        signal: AbortSignal.timeout(3500), credentials: "omit", mode: "cors",
+      });
+      if (!health.ok) throw new Error("Connector unavailable");
+
+      let targetAddress = ip.trim();
+      const gatewayResponse = await fetch("http://127.0.0.1:8765/api/v1/gateway", {
+        signal: AbortSignal.timeout(3500), credentials: "omit", mode: "cors",
+      });
+      if (gatewayResponse.ok) {
+        const gatewayData = await gatewayResponse.json();
+        if (gatewayData.gateway) {
+          targetAddress = gatewayData.gateway;
+          setIp(targetAddress);
+        }
+      }
+
+      const resultResponse = await fetch("http://127.0.0.1:8765/api/v1/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: targetAddress }),
+        signal: AbortSignal.timeout(9000),
+        credentials: "omit",
+        mode: "cors",
+      });
+      const result = await resultResponse.json();
+      if (!resultResponse.ok) throw new Error(result.detail || "Router discovery failed");
+      setDiscovery(result);
+      if (result.brand && !brand) setBrand(result.brand);
       setConnector("available");
-    } catch { setConnector("offline"); }
+    } catch {
+      setConnector("offline");
+    }
   }
 
   function chooseBrand(value: string) { setBrand(value); setStep("connect"); }
@@ -61,7 +92,7 @@ export default function Home() {
             <div className="connect-layout"><section className="panel connect-panel"><div className="panel-heading"><div><div className="eyebrow">GET STARTED</div><h2>Connect your router</h2><p>No need to know your router model. Routerly will try to identify it automatically.</p></div><div className="panel-icon"><Router size={21}/></div></div>
               <div className="steps"><div className={`step ${step === "brand" ? "current" : "done"}`}><span>{step === "brand" ? "1" : <Check size={13}/>}</span> Router</div><div className="step-line"/><div className={`step ${step === "connect" ? "current" : ""}`}><span>2</span> Connect</div></div>
               {step === "brand" && <div className="wizard-content"><div className="auto-detect-card"><div className="auto-detect-icon"><ScanSearch size={22}/></div><div className="auto-detect-copy"><strong>Don't know your router brand?</strong><span>No problem. Let Routerly try to detect it.</span></div><button className="primary-button" onClick={startAutoDetect}>Auto detect <ArrowRight size={15}/></button></div><div className="or-divider"><span>OR SELECT BRAND (OPTIONAL)</span></div><label className="field-label" htmlFor="brand-search">Choose your router brand</label><div className="search-box"><Search size={17}/><input id="brand-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search 70+ brands…" autoComplete="off"/></div><div className="brand-grid">{filtered.slice(0,12).map((b) => <button className="brand-option" key={b} onClick={() => chooseBrand(b)}><span className="brand-mark">{b.slice(0,1)}</span><span>{b}</span><ArrowRight size={14}/></button>)}</div><div className="results-note">Showing {Math.min(filtered.length,12)} of {filtered.length} matching brands</div></div>}
-              {step === "connect" && <div className="wizard-content"><button className="back-link" onClick={() => setStep("brand")}><ArrowLeft size={14}/> Back</button><div className="selected-brand"><span className="brand-mark large-mark">{brand ? brand.slice(0,1) : <ScanSearch size={18}/>}</span><div><strong>{brand || "Automatic detection"}</strong><small>{brand ? "Selected brand · model detection is automatic" : "Router brand and model will be identified if supported"}</small></div></div><label className="field-label" htmlFor="router-ip">Router address</label><input className="text-input mono" id="router-ip" value={ip} onChange={e => setIp(e.target.value)} placeholder="192.168.1.1"/><p className="helper-text">This is a common router address. If yours is different, enter the gateway address shown in your device's Wi-Fi network details. Automatic gateway detection will be provided by the local connector.</p><div className="notice"><ShieldCheck size={17}/><p>Routerly does not need your router model to start. The local connector will attempt device identification. Admin credentials are only needed if the router requires authentication.</p></div><button className="primary-button full-button" onClick={checkConnector} disabled={connector === "checking"}>{connector === "checking" ? "Checking local connector…" : "Check local connector"} <ArrowRight size={16}/></button>{connector === "offline" && <p className="error-note">Local connector not detected. Install and run the connector on a computer connected to this network.</p>}{connector === "available" && <p className="success-note">Local connector is responding. Router discovery and login are not yet enabled in this release.</p>}</div>}
+              {step === "connect" && <div className="wizard-content"><button className="back-link" onClick={() => setStep("brand")}><ArrowLeft size={14}/> Back</button><div className="selected-brand"><span className="brand-mark large-mark">{brand ? brand.slice(0,1) : <ScanSearch size={18}/>}</span><div><strong>{brand || "Automatic detection"}</strong><small>{brand ? "Selected brand · model detection is automatic" : "Router brand and model will be identified if supported"}</small></div></div><label className="field-label" htmlFor="router-ip">Router address</label><input className="text-input mono" id="router-ip" value={ip} onChange={e => setIp(e.target.value)} placeholder="192.168.1.1"/><p className="helper-text">This is a common router address. If yours is different, enter the gateway address shown in your device's Wi-Fi network details. Automatic gateway detection will be provided by the local connector.</p><div className="notice"><ShieldCheck size={17}/><p>Routerly does not need your router model to start. The local connector will attempt device identification. Admin credentials are only needed if the router requires authentication.</p></div><button className="primary-button full-button" onClick={checkConnector} disabled={connector === "checking"}>{connector === "checking" ? "Checking local connector…" : "Check local connector"} <ArrowRight size={16}/></button>{connector === "offline" && <p className="error-note">Local connector not detected. Install and run the connector on a computer connected to this network.</p>}{connector === "available" && discovery && <div className="discovery-result"><div className="discovery-heading"><Check size={15}/><strong>{discovery.reachable ? "Router found" : "Connector ready"}</strong></div><p>{discovery.message}</p><div className="discovery-meta"><span>Address</span><strong className="mono">{discovery.address}</strong></div>{discovery.brand && <div className="discovery-meta"><span>Detected brand</span><strong>{discovery.brand}</strong></div>}{discovery.model && <div className="discovery-meta"><span>Model</span><strong>{discovery.model}</strong></div>}{discovery.reachable && <a className="router-login-link" href={discovery.login_url} target="_blank" rel="noreferrer">Open router login page <ArrowRight size={14}/></a>}</div>}</div>}
               <div className="panel-foot"><ShieldCheck size={15}/> Your router credentials stay on your device.</div>
             </section>
             <aside className="right-column"><div className="panel info-panel"><div className="info-icon"><Wifi size={19}/></div><h3>One dashboard. Many brands.</h3><p>Manage supported routers through a consistent, easy-to-use interface.</p><div className="mini-brand-list"><span>TP-Link</span><span>ASUS</span><span>MikroTik</span><span>Ubiquiti</span><span>+ 70 brands</span></div></div><div className="panel checklist-panel"><h3>What you can manage</h3>{["Wi-Fi & wireless settings","Connected devices","Internet & LAN","Security & access","Network performance","Diagnostics & logs"].map(x => <div className="check-row" key={x}><Check size={15}/>{x}</div>)}<p className="small-note">Availability depends on router model and firmware.</p></div></aside></div>
