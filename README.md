@@ -26,3 +26,15 @@ Never enter router credentials into an unverified interface. This initial web fr
 ## Target brands
 
 The initial brand catalogue is currently defined in `app/page.tsx` and can be moved into a dedicated data module as the compatibility database grows.
+
+## Local connector (early discovery release)
+
+The local connector is a separate Python service. It runs on the user's computer, not on Vercel, because a cloud-hosted website cannot directly inspect the user's private LAN.
+
+See [connector installation instructions](connector/README.md). The connector currently:
+- detects the computer's default gateway from the operating system routing table;
+- checks the router web interface over HTTP/HTTPS on ports 80/443;
+- performs best-effort manufacturer fingerprinting from the login page;
+- does not request, store, or transmit router credentials.
+
+This is discovery only. Router login automation and configuration changes are not implemented yet. Feature availability will depend on tested router model/firmware adapters.
