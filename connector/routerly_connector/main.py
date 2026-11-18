@@ -80,16 +80,7 @@ def detect_default_gateway() -> str | None:
         if match:
             return match.group(1)
 
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.connect(("192.0.2.1", 80))
-        local_ip = sock.getsockname()[0]
-        sock.close()
-        octets = local_ip.split(".")
-        if len(octets) == 4 and all(part.isdigit() for part in octets):
-            return ".".join(octets[:3] + ["1"])
-    except OSError:
-        pass
+    # Do not guess a gateway address; ask the user to enter it if OS routing data is unavailable.
     return None
 
 
