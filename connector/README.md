@@ -54,3 +54,17 @@ This connector is LAN-local. Global remote access additionally requires the
 cloud relay, authenticated user identity, secure device pairing and a running
 LAN agent. Those pieces are not yet integrated into this UI. No router
 port-forwarding should be enabled.
+
+
+## Automatic model and firmware detection
+
+POST /api/v1/tenda/identify accepts only the private router address and
+performs read-only inspection of the local web interface. It returns a
+compatibility profile, detected model/firmware strings when exposed, and
+explicit capability states. Unknown profiles are write-locked.
+
+The initial registry includes a candidate Tenda F3 V12 profile, a narrowly
+scoped AC10 RTL V15 reference profile, and a generic Tenda fallback. F3
+write operations are intentionally not enabled until verified on the exact
+hardware revision and firmware. The connector must not guess endpoint
+formats based on brand alone.
