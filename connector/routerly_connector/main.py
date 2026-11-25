@@ -91,14 +91,14 @@ def detect_default_gateway() -> str | None:
     system = platform.system().lower()
     if system == "windows":
         for line in run_command(["route", "print", "-4"]).splitlines():
-            match = re.match(r"\\s*0\\.0\\.0\\.0\\s+0\\.0\\.0\\.0\\s+(\\d{1,3}(?:\\.\\d{1,3}){3})", line)
+            match = re.match(r"\s*0\.0\.0\.0\s+0\.0\.0\.0\s+(\d{1,3}(?:\.\d{1,3}){3})", line)
             if match: return match.group(1)
     elif system == "linux":
         for line in run_command(["ip", "-4", "route", "show", "default"]).splitlines():
             parts = shlex.split(line)
             if len(parts) >= 3 and parts[0] == "default" and parts[1] == "via": return parts[2]
     elif system == "darwin":
-        match = re.search(r"^\\s*gateway:\\s*(\\S+)", run_command(["route", "-n", "get", "default"]), re.M)
+        match = re.search(r"^\s*gateway:\s*(\S+)", run_command(["route", "-n", "get", "default"]), re.M)
         if match: return match.group(1)
     return None
 
@@ -239,7 +239,7 @@ async def tenda_website_rule(p: WebsiteRuleRequest):
         raise HTTPException(400,"Tenda AC10 website rules accept up to 10 keywords (2-31 lowercase letters, digits, dot or hyphen).")
     form={"deviceId":mac,"enable":"1" if p.enabled else "0"}
     if p.enabled:
-        if not re.fullmatch(r"\\d{2}:\\d{2}-\\d{2}:\\d{2}",p.allowed_window): raise HTTPException(400,"Use HH:MM-HH:MM time window.")
+        if not re.fullmatch(r"\d{2}:\d{2}-\d{2}:\d{2}",p.allowed_window): raise HTTPException(400,"Use HH:MM-HH:MM time window.")
         form.update({"deviceName":p.device_name,"time":p.allowed_window,"url_enable":"1" if p.websites else "0",
                      "urls":",".join(x.lower() for x in p.websites),"day":encode_days(p.days,p.every_day),
                      "limit_type":"1" if p.mode=="whitelist" else "0"})
@@ -302,15 +302,15 @@ async def tenda_identify(p: DiscoverRequest):
         raise HTTPException(502, "Router web interface is unreachable from this computer.")
     body = pages[0]
     # Only use explicit strings exposed by the local web UI; never guess a model.
-    model_match = re.search(r"(?:modelName|productName|model)\\s*[:=]\\s*[\"']?([A-Za-z0-9 _.-]{2,40})", body, re.I)
-    firmware_match = re.search(r"(?:firmwareVersion|softwareVersion|version|firmware)\\s*[:=]\\s*[\"']?(V?[0-9][A-Za-z0-9._-]{3,40})", body, re.I)
+    model_match = re.search(r"(?:modelName|productName|model)\s*[:=]\s*[\"']?([A-Za-z0-9 _.-]{2,40})", body, re.I)
+    firmware_match = re.search(r"(?:firmwareVersion|softwareVersion|version|firmware)\s*[:=]\s*[\"']?(V?[0-9][A-Za-z0-9._-]{3,40})", body, re.I)
     title_match = re.search(r"<title[^>]*>(.*?)</title>", body, re.I | re.S)
     title = re.sub(r"\\s+", " ", title_match.group(1)).strip() if title_match else ""
     model = model_match.group(1).strip() if model_match else (title if re.search(r"tenda", title, re.I) else "")
     firmware = firmware_match.group(1).strip() if firmware_match else ""
     # Some old interfaces include their version string in JS/HTML without a key.
     if not firmware:
-        candidate = re.search(r"\\bV(?:12|15)\\.\\d{2}\\.\\d{2}\\.[0-9A-Za-z._-]+", body, re.I)
+        candidate = re.search(r"\bV(?:12|15)\.\d{2}\.\d{2}\.[0-9A-Za-z._-]+", body, re.I)
         firmware = candidate.group(0) if candidate else ""
     profile = identify_profile(model, firmware)
     return {
