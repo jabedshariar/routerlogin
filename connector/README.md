@@ -1,50 +1,56 @@
-# Routerly Local Connector
+# Routerly Tenda Local Connector
 
-The connector runs on the user's computer and gives the Routerly web UI a narrowly scoped way to inspect the local default gateway. It binds to loopback only and does not accept arbitrary URLs, credentials, commands, or port ranges.
+This connector runs on a computer inside the same LAN as the Tenda router. It
+connects to the router locally; router admin credentials are sent directly from
+the browser to this loopback connector and are not sent to Routerly's cloud.
 
-## Requirements
-- Python 3.10+
-- Computer connected to the same LAN as the router
+## Run
 
-## Install and run (Windows PowerShell)
-Open PowerShell in this connector folder:
-
-```powershell
-py -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m uvicorn routerly_connector.main:app --host 127.0.0.1 --port 8765
-```
-
-## Install and run (macOS / Linux)
+Python 3.10+:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m uvicorn routerly_connector.main:app --host 127.0.0.1 --port 8765
+cd connector
+python -m venv .venv
+# Windows: .venv\\Scripts\\activate
+# macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn routerly_connector.main:app --host 127.0.0.1 --port 8765
 ```
 
-Keep the terminal running while using Routerly.
+Open Routerly in the same computer's browser. The connector binds only to
+127.0.0.1 and permits only the configured Routerly origins.
 
-## Verify
-Open http://127.0.0.1:8765/health on the same computer. Expected response:
+## Tenda API endpoints
 
-```json
-{"ok":true,"service":"routerly-local-connector","version":"0.1.0"}
-```
+The first adapter targets the reverse-engineered Tenda AC10-family web API.
+Endpoints currently implemented:
 
-The web UI uses:
-- GET /api/v1/gateway — reads the operating system's default route.
-- POST /api/v1/discover — probes only the supplied private LAN IP on HTTP/HTTPS ports 80/443.
+- `POST /api/v1/tenda/status` — status and Wi-Fi settings (password fields redacted)
+- `POST /api/v1/tenda/clients` — connected clients and blacklist
+- `POST /api/v1/tenda/block`, `/unblock` — immediate client blacklist
+- `POST /api/v1/tenda/bandwidth` — per-device upload/download caps (Mbps)
+- `POST /api/v1/tenda/website-rule` — per-device parental time and website keywords
+- `POST /api/v1/tenda/wifi` — 2.4/5 GHz SSID and password update
+- `POST /api/v1/tenda/scheduled-reboot` — scheduled maintenance configuration
+- `POST /api/v1/tenda/feature-status` — compatibility/status matrix
 
-## Security boundaries
-- Binds to 127.0.0.1; do not change this to 0.0.0.0.
-- Allows only the Routerly production origins and local development origins configured in the source.
-- Rejects non-private, loopback, link-local, multicast, reserved and unspecified target IPs.
-- Does not scan subnets, follow redirects, accept arbitrary URLs, or store/send router credentials.
-- Uses read-only HTTP GET requests for reachability and best-effort page fingerprinting.
-- HTTPS certificate verification is disabled only for the local router probe because some router admin pages use self-signed certificates. No credentials are sent.
-- This is an early discovery connector, not yet a router configuration agent. Do not expose its port to the internet.
+Every request requires router address and admin password. The password is
+used for a local Tenda login and is not persisted by the connector. This
+adapter has not yet been validated against your physical router. Do not use
+Wi-Fi, schedule, or other disruptive writes until testing on the exact model
+and firmware. Always keep a wired or alternate admin recovery path.
 
-If your deployed Routerly domain changes, add that exact origin to ALLOWED_ORIGINS in routerly_connector/main.py and restart the connector.
+## Not yet supported / verified
+
+Encrypted Private DNS (DoH/DoT), secure modern VPN setup, admin password
+rotation, and cumulative total-usage counters are not exposed by the verified
+AC10 API reference. Manual WAN DNS, PPTP/L2TP, or instantaneous speed must not
+be mislabeled as those features. The AC10 API reference reports PPTP/L2TP
+support on some firmware; PPTP is obsolete and should not be recommended.
+
+## Remote access
+
+This connector is LAN-local. Global remote access additionally requires the
+cloud relay, authenticated user identity, secure device pairing and a running
+LAN agent. Those pieces are not yet integrated into this UI. No router
+port-forwarding should be enabled.
