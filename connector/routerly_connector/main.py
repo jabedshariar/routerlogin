@@ -23,7 +23,7 @@ from .adapters import identify_profile
 APP_VERSION = "0.2.0"
 ALLOWED_ORIGINS = [
     "https://routerlogin.vercel.app",
-    "https://routerlogin-r87e.vercel.app",
+    "https://routerlogin-r87e.vercel.app",\n    "https://routerlogin-git-main-jabedshariars-projects.vercel.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
