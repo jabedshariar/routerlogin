@@ -191,8 +191,9 @@ async def tenda_status(p: TendaRequest):
     try:
         clients=tenda_call(base,op,"getOnlineList")
         wifi=tenda_call(base,op,"WifiBasicGet")
-        return {"vendor":"Tenda","status":status,"clients_raw":clients,"wifi_raw":wifi,
-                "model":"AC10-family (firmware must be checked)","compatibility":"API response received; model/firmware not yet positively verified"}
+        wifi_safe = {k:v for k,v in wifi.items() if k not in ("wrlPwd","wrlPwd_5g","password","adminPwd")} if isinstance(wifi,dict) else {}
+        return {"vendor":"Tenda","status":status,"clients_raw":clients,"wifi":wifi_safe,
+                "model":"Tenda (exact model/firmware must be checked)","compatibility":"API response received; model/firmware not yet positively verified"}
     except HTTPException: raise
 
 @app.post("/api/v1/tenda/clients")
@@ -261,7 +262,7 @@ async def tenda_scheduled_reboot(p: RebootScheduleRequest):
     base,op,_=require_tenda(p.address,p.password)
     old=tenda_call(base,op,"GetSysAutoRebbotCfg")
     form=dict(old) if isinstance(old,dict) else {}
-    form.update({"autoRebootEn":"1" if p.enabled else "0","rebootTime":p.time,"delay": "1" if p.delay else "0"})
+    form.update({"autoRebootEn":"1" if p.enabled else "0","rebootTime":p.time,"delayRebootEn": "true" if p.delay else "false"})
     result=tenda_call(base,op,"SetSysAutoRebbotCfg",form)
     return {"ok":True,"result":result,"note":"The exact schedule field names are firmware-dependent; verify the router response and admin UI."}
 
