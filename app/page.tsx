@@ -39,6 +39,7 @@ export default function Home() {
     setRouterData(null);
     setCompatibility(null);
     setRouterError("");
+    let detectedCompatibility: any = null;
     try {
       const health = await fetch("http://127.0.0.1:8765/health", {
         signal: AbortSignal.timeout(3500), credentials: "omit", mode: "cors",
@@ -75,9 +76,12 @@ export default function Home() {
           signal: AbortSignal.timeout(7000), credentials: "omit", mode: "cors",
         });
         const identifyPayload = await identifyResponse.json();
-        if (identifyResponse.ok) setCompatibility(identifyPayload);
+        if (identifyResponse.ok) {
+          detectedCompatibility = identifyPayload;
+          setCompatibility(identifyPayload);
+        }
       }
-      if (result.brand && result.brand.toLowerCase() === "tenda" && adminPassword && compatibility?.profile?.profile_id === "rtl-v15-ac10") {
+      if (result.brand && result.brand.toLowerCase() === "tenda" && adminPassword && detectedCompatibility?.profile?.profile_id === "rtl-v15-ac10") {
         const api = await fetch("http://127.0.0.1:8765/api/v1/tenda/status", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ address: targetAddress, password: adminPassword }),
@@ -86,9 +90,9 @@ export default function Home() {
         const payload = await api.json();
         if (!api.ok) throw new Error(payload.detail || "Tenda login failed");
         setRouterData(payload);
-      } else if (result.brand && result.brand.toLowerCase() === "tenda" && adminPassword && compatibility?.profile?.profile_id === "f3-v12-legacy") {
+      } else if (result.brand && result.brand.toLowerCase() === "tenda" && adminPassword && detectedCompatibility?.profile?.profile_id === "f3-v12-legacy") {
         setRouterError("Tenda F3 detected. Its firmware-specific adapter is identified, but control APIs are still locked until validated against this exact F3 hardware and firmware.");
-      } else if (result.brand && result.brand.toLowerCase() === "tenda" && adminPassword && compatibility?.profile?.profile_id !== "rtl-v15-ac10") {
+      } else if (result.brand && result.brand.toLowerCase() === "tenda" && adminPassword && detectedCompatibility?.profile?.profile_id !== "rtl-v15-ac10") {
         setRouterError("Tenda router detected. This model/firmware does not yet have a validated control adapter; no configuration commands were sent.");
       }
       if (!result.brand || result.brand.toLowerCase() !== "tenda") {
