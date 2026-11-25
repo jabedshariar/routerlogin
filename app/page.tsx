@@ -22,6 +22,9 @@ export default function Home() {
   const [step, setStep] = useState<Step>("brand");
   const [brand, setBrand] = useState("Tenda");
   const [ip, setIp] = useState("192.168.1.1");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [routerData, setRouterData] = useState<any>(null);
+  const [routerError, setRouterError] = useState("");
   const [query, setQuery] = useState("");
   const [active, setActive] = useState("Overview");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -32,6 +35,8 @@ export default function Home() {
   async function checkConnector() {
     setConnector("checking");
     setDiscovery(null);
+    setRouterData(null);
+    setRouterError("");
     try {
       const health = await fetch("http://127.0.0.1:8765/health", {
         signal: AbortSignal.timeout(3500), credentials: "omit", mode: "cors",
@@ -61,16 +66,32 @@ export default function Home() {
       const result = await resultResponse.json();
       if (!resultResponse.ok) throw new Error(result.detail || "Router discovery failed");
       setDiscovery(result);
-      if (result.brand && !brand) setBrand(result.brand);
+      if (result.brand && result.brand.toLowerCase() === "tenda" && adminPassword) {
+        const api = await fetch("http://127.0.0.1:8765/api/v1/tenda/status", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: targetAddress, password: adminPassword }),
+          signal: AbortSignal.timeout(12000), credentials: "omit", mode: "cors",
+        });
+        const payload = await api.json();
+        if (!api.ok) throw new Error(payload.detail || "Tenda login failed");
+        setRouterData(payload);
+      }
+      if (!result.brand || result.brand.toLowerCase() !== "tenda") {
+        setRouterError("Tenda router was not positively identified. Routerly only supports Tenda.");
+      } else if (!adminPassword) {
+        setRouterError("Enter the Tenda administrator password, then connect again.");
+      }
+      if (result.brand && !brand) setBrand("Tenda");
       setConnector("available");
-    } catch {
+    } catch (error) {
+      setRouterError(error instanceof Error ? error.message : "Could not connect to Tenda router.");
       setConnector("offline");
     }
   }
 
   function chooseBrand(value: string) { setBrand("Tenda"); setStep("connect"); }
   function startAutoDetect() { setBrand("Tenda"); setStep("connect"); }
-  function reset() { setStep("connect"); setBrand("Tenda"); setQuery(""); setConnector("idle"); }
+  function reset() { setStep("connect"); setBrand("Tenda"); setQuery(""); setConnector("idle"); setAdminPassword(""); setRouterData(null); setRouterError(""); }
 
   return (
     <main className="shell">
@@ -93,8 +114,9 @@ export default function Home() {
             <div className="connect-layout"><section className="panel connect-panel"><div className="panel-heading"><div><div className="eyebrow">GET STARTED</div><h2>Connect your router</h2><p>Connect your Tenda router. Routerly will identify the model and firmware where possible.</p></div><div className="panel-icon"><Router size={21}/></div></div>
               <div className="steps"><div className={`step ${step === "brand" ? "current" : "done"}`}><span>{step === "brand" ? "1" : <Check size={13}/>}</span> Router</div><div className="step-line"/><div className={`step ${step === "connect" ? "current" : ""}`}><span>2</span> Connect</div></div>
               {step === "brand" && <div className="wizard-content"><div className="auto-detect-card"><div className="auto-detect-icon"><ScanSearch size={22}/></div><div className="auto-detect-copy"><strong>Don't know your router brand?</strong><span>No problem. Let Routerly try to detect it.</span></div><button className="primary-button" onClick={startAutoDetect}>Auto detect <ArrowRight size={15}/></button></div><div className="or-divider"><span>OR SELECT BRAND (OPTIONAL)</span></div><label className="field-label" htmlFor="brand-search">Choose your router brand</label><div className="search-box"><Search size={17}/><input id="brand-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Tenda…" autoComplete="off"/></div><div className="brand-grid">{filtered.slice(0,12).map((b) => <button className="brand-option" key={b} onClick={() => chooseBrand(b)}><span className="brand-mark">{b.slice(0,1)}</span><span>{b}</span><ArrowRight size={14}/></button>)}</div><div className="results-note">Tenda router support</div></div>}
-              {step === "connect" && <div className="wizard-content"><button className="back-link" onClick={() => setStep("brand")}><ArrowLeft size={14}/> Back</button><div className="selected-brand"><span className="brand-mark large-mark">{brand ? brand.slice(0,1) : <ScanSearch size={18}/>}</span><div><strong>{brand || "Automatic detection"}</strong><small>{brand ? "Selected brand · model detection is automatic" : "Router brand and model will be identified if supported"}</small></div></div><label className="field-label" htmlFor="router-ip">Router address</label><input className="text-input mono" id="router-ip" value={ip} onChange={e => setIp(e.target.value)} placeholder="192.168.1.1"/><p className="helper-text">This is a common router address. If yours is different, enter the gateway address shown in your device's Wi-Fi network details. Automatic gateway detection will be provided by the local connector.</p><div className="notice"><ShieldCheck size={17}/><p>Routerly does not need your router model to start. The local connector will attempt device identification. Admin credentials are only needed if the router requires authentication.</p></div><button className="primary-button full-button" onClick={checkConnector} disabled={connector === "checking"}>{connector === "checking" ? "Checking local connector…" : "Check local connector"} <ArrowRight size={16}/></button>{connector === "offline" && <p className="error-note">Local connector not detected. Install and run the connector on a computer connected to this network.</p>}{connector === "available" && discovery && <div className="discovery-result"><div className="discovery-heading"><Check size={15}/><strong>{discovery.reachable ? "Router found" : "Connector ready"}</strong></div><p>{discovery.message}</p><div className="discovery-meta"><span>Address</span><strong className="mono">{discovery.address}</strong></div>{discovery.brand && <div className="discovery-meta"><span>Detected brand</span><strong>{discovery.brand}</strong></div>}{discovery.model && <div className="discovery-meta"><span>Model</span><strong>{discovery.model}</strong></div>}{discovery.reachable && <a className="router-login-link" href={discovery.login_url} target="_blank" rel="noreferrer">Open router login page <ArrowRight size={14}/></a>}</div>}</div>}
-              <div className="panel-foot"><ShieldCheck size={15}/> Your router credentials stay on your device.</div>
+              {step === "connect" && <div className="wizard-content"><button className="back-link" onClick={() => setStep("brand")}><ArrowLeft size={14}/> Back</button><div className="selected-brand"><span className="brand-mark large-mark">{brand ? brand.slice(0,1) : <ScanSearch size={18}/>}</span><div><strong>{brand || "Automatic detection"}</strong><small>{brand ? "Selected brand · model detection is automatic" : "Router brand and model will be identified if supported"}</small></div></div><label className="field-label" htmlFor="router-ip">Router address</label><input className="text-input mono" id="router-ip" value={ip} onChange={e => setIp(e.target.value)} placeholder="192.168.1.1"/>
+              <label className="field-label" htmlFor="tenda-admin-password" style={{marginTop:14}}>Tenda administrator password</label><input className="text-input" id="tenda-admin-password" type="password" autoComplete="current-password" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} placeholder="Router admin password"/><p className="helper-text">This is a common router address. If yours is different, enter the gateway address shown in your device's Wi-Fi network details. Automatic gateway detection will be provided by the local connector.</p><div className="notice"><ShieldCheck size={17}/><p>Routerly currently targets Tenda routers. The admin password is sent to the local connector only; it is not sent to Routerly cloud.</p></div><button className="primary-button full-button" onClick={checkConnector} disabled={connector === "checking"}>{connector === "checking" ? "Checking local connector…" : "Check local connector"} <ArrowRight size={16}/></button>{connector === "offline" && <p className="error-note">Local connector not detected. Install and run the connector on a computer connected to this network.</p>}{routerError && <p className="error-note">{routerError}</p>}{connector === "available" && discovery && <div className="discovery-result"><div className="discovery-heading"><Check size={15}/><strong>{discovery.reachable ? "Router found" : "Connector ready"}</strong></div><p>{discovery.message}</p><div className="discovery-meta"><span>Address</span><strong className="mono">{discovery.address}</strong></div>{discovery.brand && <div className="discovery-meta"><span>Detected brand</span><strong>{discovery.brand}</strong></div>}{discovery.model && <div className="discovery-meta"><span>Model</span><strong>{discovery.model}</strong></div>}{discovery.reachable && <a className="router-login-link" href={discovery.login_url} target="_blank" rel="noreferrer">Open router login page <ArrowRight size={14}/></a>}{routerData && <div className="success-note">Tenda API login successful. Router API responded. Exact model/firmware compatibility still needs verification.</div>}</div>}</div>}
+              <div className="panel-foot"><ShieldCheck size={15}/> Tenda credentials are handled locally and are not stored by Routerly cloud.</div>
             </section>
             <aside className="right-column"><div className="panel info-panel"><div className="info-icon"><Wifi size={19}/></div><h3>Built for Tenda routers.</h3><p>Tenda-focused controls with compatibility checks for each model and firmware.</p><div className="mini-brand-list"><span>Tenda AC</span><span>Tenda AC10</span><span>Tenda AC10U</span><span>Other Tenda models</span></div></div><div className="panel checklist-panel"><h3>What you can manage</h3>{["Wi-Fi & wireless settings","Connected devices","Internet & LAN","Security & access","Network performance","Diagnostics & logs"].map(x => <div className="check-row" key={x}><Check size={15}/>{x}</div>)}<p className="small-note">Availability depends on router model and firmware.</p></div></aside></div>
           </> : <div className="panel empty-module"><div className="empty-icon"><Router size={25}/></div><h2>Connect a router to continue</h2><p>{modules.find(m => m.name === active)?.desc}. Connect a supported Tenda router to check whether this feature is available on its firmware. No simulated controls are shown.</p><button className="primary-button" onClick={() => {setActive("Overview");reset()}}>Connect a router <ArrowRight size={15}/></button></div>}
