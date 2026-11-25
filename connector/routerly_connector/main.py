@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, SecretStr
+from .adapters import identify_profile
 
 APP_VERSION = "0.2.0"
 ALLOWED_ORIGINS = [
@@ -280,3 +281,43 @@ async def tenda_feature_status(p: TendaRequest):
         "admin_password":{"status":"not_implemented","detail":"Native password-change form requires dedicated safety-tested flow."},
         "total_usage":{"status":"unsupported_cumulative_counter_not_verified","detail":"Instantaneous WAN rates are not cumulative usage."}
     },"router_status":status}
+
+
+@app.post("/api/v1/tenda/identify")
+async def tenda_identify(p: DiscoverRequest):
+    """Read-only identification; does not authenticate or change router settings."""
+    address = validate_router_address(p.address)
+    pages = []
+    for scheme in ("http", "https"):
+        try:
+            context = ssl._create_unverified_context()
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=context))
+            response = opener.open(f"{scheme}://{address}/", timeout=3)
+            body = response.read(250_000).decode("utf-8", "ignore")
+            pages.append(body)
+            break
+        except Exception:
+            continue
+    if not pages:
+        raise HTTPException(502, "Router web interface is unreachable from this computer.")
+    body = pages[0]
+    # Only use explicit strings exposed by the local web UI; never guess a model.
+    model_match = re.search(r"(?:modelName|productName|model)\\s*[:=]\\s*[\"']?([A-Za-z0-9 _.-]{2,40})", body, re.I)
+    firmware_match = re.search(r"(?:firmwareVersion|softwareVersion|version|firmware)\\s*[:=]\\s*[\"']?(V?[0-9][A-Za-z0-9._-]{3,40})", body, re.I)
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", body, re.I | re.S)
+    title = re.sub(r"\\s+", " ", title_match.group(1)).strip() if title_match else ""
+    model = model_match.group(1).strip() if model_match else (title if re.search(r"tenda", title, re.I) else "")
+    firmware = firmware_match.group(1).strip() if firmware_match else ""
+    # Some old interfaces include their version string in JS/HTML without a key.
+    if not firmware:
+        candidate = re.search(r"\\bV(?:12|15)\\.\\d{2}\\.\\d{2}\\.[0-9A-Za-z._-]+", body, re.I)
+        firmware = candidate.group(0) if candidate else ""
+    profile = identify_profile(model, firmware)
+    return {
+        "brand": "Tenda" if re.search(r"tenda", body[:250_000], re.I) else "Unknown",
+        "model": model or None,
+        "firmware": firmware or None,
+        "profile": profile,
+        "writes_enabled": False,
+        "message": "Model/profile identified. Router-specific write actions remain locked until this hardware and firmware are validated."
+    }
